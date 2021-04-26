@@ -3,7 +3,7 @@
     <template slot="field">
       <vue-tags-input
         v-model="tag"
-        :tags="attachedResources" 
+        :tags="attachedResources"
         :autocomplete-min-length=0
         :add-only-from-autocomplete=true
         :add-from-paste=false
@@ -12,37 +12,37 @@
         :placeholder="placeholder"
         :is-duplicate="isDuplicate"
         :autocomplete-items="filteredResources"
-        :avoid-adding-duplicates="! field.duplicate" 
+        :avoid-adding-duplicates="! field.duplicate"
         @input="performSearch"
-        @before-adding-tag="addingTag"  
-        @before-editing-tag="editingTag"  
+        @before-adding-tag="addingTag"
+        @before-editing-tag="editingTag"
         @tags-changed="tags => attachedResources = tags"
       >
-        <div slot="tag-center" slot-scope="props"> 
-          <span 
-            @click="performEditTag(props)" 
-            > 
-            {{ props.tag.text }} 
+        <div slot="tag-center" slot-scope="props">
+          <span
+            @click="performEditTag(props)"
+            >
+            {{ props.tag.text }}
 
-            <svg 
+            <svg
               v-if="field.pivots"
               xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
               viewBox="0 0 347 347" width="15px"
-              style="cursor: pointer;"  
-            > 
-              <polygon fill="#fff" 
+              style="cursor: pointer;"
+            >
+              <polygon fill="#fff"
                 points="284.212,0 231.967,51.722 295.706,115.461 347.429,63.216"/>
-              <polygon fill="#fff" 
+              <polygon fill="#fff"
                 points="0,347.429 85.682,319.216 28.212,261.747"/>
-            
-              <rect fill="#fff" x="115.322" y="56.259" width="90.14" height="261.554"
-                transform="matrix(-0.7071 -0.7071 0.7071 -0.7071 141.551 432.7058)" /> 
-            </svg>
-          </span>          
-        </div>
-      </vue-tags-input> 
 
-      <modal v-if="processingResource" role="dialog" @modal-close="cancelProcessing">  
+              <rect fill="#fff" x="115.322" y="56.259" width="90.14" height="261.554"
+                transform="matrix(-0.7071 -0.7071 0.7071 -0.7071 141.551 432.7058)" />
+            </svg>
+          </span>
+        </div>
+      </vue-tags-input>
+
+      <modal v-if="processingResource" role="dialog" @modal-close="cancelProcessing">
             <!-- @keydown="handleKeydown" -->
           <form
             autocomplete="off"
@@ -52,20 +52,20 @@
             :name="field.attribute"
             :id="field.attribute"
           >
-          <form-heading-field 
+          <form-heading-field
             :field="{
               asHtml: true,
-              value: processingResource.attached 
+              value: processingResource.attached
                 ? __('Update :resource', { resource: processingResource.text })
-                : __('Attach :resource', { resource: processingResource.text }) 
-            }" 
+                : __('Attach :resource', { resource: processingResource.text })
+            }"
             class="mb-6"
           />
 
 
-          <p class="text-80 px-8 my-1"> 
-            <loading-view :loading="loading"> 
-              <card> 
+          <p class="text-80 px-8 my-1">
+            <loading-view :loading="loading">
+              <card>
                 <!-- Pivot Fields -->
                 <div v-for="field in fields">
                   <component
@@ -92,14 +92,14 @@
 
                   <progress-button
                     ref="attachButton"
-                    dusk="confirm-attach-button" 
+                    dusk="confirm-attach-button"
                     type="submit"
                     class="btn btn-default"
-                    :class="'btn-primary'" 
+                    :class="'btn-primary'"
                     :disabled="processing"
                     :processing="processing"
                     :form="field.attribute"
-                  > 
+                  >
                     {{ __("Attach Resource") }}
                   </progress-button>
                 </div>
@@ -107,7 +107,7 @@
             </loading-view>
           </p>
 
-          </form> 
+          </form>
       </modal>
     </template>
   </default-field>
@@ -158,7 +158,7 @@
 
 <script>
 import { FormField, HandlesValidationErrors, Errors } from 'laravel-nova'
- 
+
 import { VueTagsInput, createTag, createTags } from '@johmun/vue-tags-input';
 
 export default {
@@ -171,38 +171,64 @@ export default {
     props: ['resourceName', 'resourceId', 'field'],
 
     data() {
-        return { 
+        return {
           tag: '',
-          attachedResources: [], 
-          pivots: [], 
-          fields: [], 
-          search: '', 
-          loading: false, 
+          attachedResources: [],
+          pivots: [],
+          fields: [],
+          search: '',
+          loading: false,
           validationErrors: new Errors(),
           processingResource: null,
           resourceProcessor: null,
           cancelCallback: () => this.resetCallbak(),
           attachCallback: () => this.resetCallbak(),
-          resetCallbak: function() { 
+          resetCallbak: function() {
             this.processingResource = null
             this.resourceProcessor = null
           },
           processing: false,
           availableResources: [],
           withTrashed: false,
-          softDeletes: false, 
+          softDeletes: false,
+          parentValue: '',
         }
     },
 
-    created() { 
+    created() {
       if (! this.field.searchable) {
-        this.getAvailableResources(); 
+        this.getAvailableResources();
       }
-      
-      this.getAttachedResources(); 
+
+      this.getAttachedResources();
+
+      if (this.field.parent_attribute) {
+        this.watchParentComponents();
+      }
     },
 
     methods: {
+      watchParentComponents() {
+        this.watchedComponents.forEach(component => {
+          let attribute = 'value'
+          if (component.field.component === 'belongs-to-field') {
+            attribute = 'selectedResource';
+          }
+          component.$watch(attribute, (value) => {
+            this.parentValue = (value && attribute == 'selectedResource') ? value.value : value;
+            this.updateOptions();
+          }, { immediate: true });
+        });
+      },
+      isWatchingComponent(component) {
+        return component.field !== undefined
+          && component.field.attribute == this.field.parent_attribute;
+      },
+      updateOptions() {
+        if (this.parentValue != null && this.parentValue != '') {
+          Nova.request().get(this.endpoint).then(({ data }) => { this.availableResources = data })
+        }
+      },
       /*
        * Set the initial, internal value for the field.
        */
@@ -213,18 +239,18 @@ export default {
       /**
        * Fill the given FormData object with the field's internal value.
        */
-      fill(formData) {     
+      fill(formData) {
         if(this.fillResources.length == 0) {
           formData.append(this.field.attribute, this.fillResources)
         } else {
-          this.appendToForm(this.fillResources, formData, this.field.attribute)  
-        } 
+          this.appendToForm(this.fillResources, formData, this.field.attribute)
+        }
       },
 
-      performSearch(search) { 
+      performSearch(search) {
         if (! this.field.searchable) return
 
-        this.search = search; 
+        this.search = search;
 
         _.debounce(()  => {
           if (this.search == search && this.search.length > 0) {
@@ -233,22 +259,22 @@ export default {
         }, Nova.config.debounce)()
       },
 
-      appendToForm(object, formData, prefix) {   
+      appendToForm(object, formData, prefix) {
         for (var key in object) {
-          if(key == 'pivotAccessor') { 
-            this.mergeFormData(this.pivots[object[key]], formData, prefix + this.wrap('pivots')) 
-          } else if("object" == typeof object[key]) { 
-            this.appendToForm(object[key], formData, prefix + this.wrap(key)) 
-          } else { 
+          if(key == 'pivotAccessor') {
+            this.mergeFormData(this.pivots[object[key]], formData, prefix + this.wrap('pivots'))
+          } else if("object" == typeof object[key]) {
+            this.appendToForm(object[key], formData, prefix + this.wrap(key))
+          } else {
             formData.append(prefix + this.wrap(key), object[key])
-          } 
-        }  
+          }
+        }
       },
 
       mergeFormData(formData, mergeForm, prefix) {
-        for (var pair of formData.entries()) {  
+        for (var pair of formData.entries()) {
           mergeForm.append(prefix + this.wrap(pair[0]), pair[1])
-        }  
+        }
       },
 
       wrap(key) {
@@ -259,81 +285,81 @@ export default {
        * Update the field's internal value.
        */
       handleChange(value) {
-        this.attachedResources = value 
-      }, 
-
-      addingTag(item) {  
-        console.log('adding tag:', item.tag.text)
-        this.processTheResource(item.tag, item.addTag)  
+        this.attachedResources = value
       },
 
-      editingTag(item) {   
-        console.log('editing tag:', item.tag.text) 
+      addingTag(item) {
+        console.log('adding tag:', item.tag.text)
+        this.processTheResource(item.tag, item.addTag)
+      },
+
+      editingTag(item) {
+        console.log('editing tag:', item.tag.text)
         this.processTheResource(item.tag, item.editTag)
       },
 
       // The duplicate function to recreate the default behaviour, would look like this:
-      isDuplicate(tags, tag) {   
-        return ! this.field.duplicate && tags.map(tag => tag.id).indexOf(tag.id) >= 0; 
+      isDuplicate(tags, tag) {
+        return ! this.field.duplicate && tags.map(tag => tag.id).indexOf(tag.id) >= 0;
       },
 
-      performEditTag(props) {  
+      performEditTag(props) {
         if(this.field.pivots) {
-          this.cancelCallback = () => { 
+          this.cancelCallback = () => {
             props.performCancelEdit(props.index)
 
             this.attachCallback = this.cancelCallback = () => {}
-          }  
+          }
 
-          this.attachCallback = () => {  
-            props.performSaveEdit(props.index) 
+          this.attachCallback = () => {
+            props.performSaveEdit(props.index)
 
             this.attachCallback = this.cancelCallback = () => {}
 
             return props.index;
-          }  
+          }
 
-          props.performOpenEdit(props.index)    
+          props.performOpenEdit(props.index)
         }
       },
 
-      async attachTheResource() {  
-        if(await this.validatePivotFields(this.processingResource)) { 
-          await this.resourceProcessor();   
-   
-          console.log('attached the resource:', this.processingResource.text)   
+      async attachTheResource() {
+        if(await this.validatePivotFields(this.processingResource)) {
+          await this.resourceProcessor();
 
-          var index = await this.attachCallback() 
+          console.log('attached the resource:', this.processingResource.text)
 
-          await this.resetCallbak() 
+          var index = await this.attachCallback()
 
-          index = typeof index == 'number' ? index : this.attachedResources.length - 1 
+          await this.resetCallbak()
+
+          index = typeof index == 'number' ? index : this.attachedResources.length - 1
 
           this.pivots[index] = this.attachmentFormData
 
           this.$set(this.attachedResources, index, _.tap(this.attachedResources[index], tag => {
             tag.attached = false
             tag.pivotAccessor = index
-          })) 
+          }))
 
-          this.processingModal = false;  
-        } 
+          this.processingModal = false;
+        }
       },
 
-      async validatePivotFields(resource) {   
-        if (this.fields.length > 0) {  
+      async validatePivotFields(resource) {
+        if (this.fields.length > 0) {
 
-          try { await this.validateRequest(resource) } catch (error) {   
+          try { await this.validateRequest(resource) } catch (error) {
             if (error.response.status == 422) {
               this.validationErrors = new Errors(error.response.data.errors)
               Nova.error(this.__('There was a problem submitting the form.'))
-            } 
+            }
 
             return false;
-          } 
-        }  
+          }
+        }
 
-        return true   
+        return true
       },
 
       validateRequest(resource) {
@@ -342,11 +368,11 @@ export default {
             this.attachmentFormData,
             {
               params: {
-                field: this.field.attribute, 
+                field: this.field.attribute,
                 resourceId: this.resourceId,
-                relatedId: this.processingResource.id, 
+                relatedId: this.processingResource.id,
                 editing: true,
-                editMode: resource.attached ? 'update-attached' : 'attach' 
+                editMode: resource.attached ? 'update-attached' : 'attach'
               },
             }
           )
@@ -354,27 +380,27 @@ export default {
 
       async processTheResource(resource, processor) {
         this.validationErrors = new Errors();
-          
+
         this.loading = true
 
         this.processingResource = resource;
-        this.resourceProcessor  = processor;  
+        this.resourceProcessor  = processor;
 
-        this.field.pivots && await this.getPivotFields(resource) 
+        this.field.pivots && await this.getPivotFields(resource)
 
-        this.processingModal = this.fields.length > 0 ? true : this.attachTheResource() 
+        this.processingModal = this.fields.length > 0 ? true : this.attachTheResource()
 
         this.loading = false;
 
         console.log('processing resource:', this.processingResource.text)
-      }, 
+      },
 
       triggerLoading() {
         this.loading = ! this.loading;
       },
 
-      cancelProcessing() { 
-        this.processingModal = false; 
+      cancelProcessing() {
+        this.processingModal = false;
 
         console.log('canceled attachment:', this.processingResource.text)
 
@@ -383,12 +409,12 @@ export default {
         this.$emit('close')
 
         this.resetCallbak()
-      },   
+      },
 
       /**
        * Get all of the available resources for the current search / trashed state.
        */
-      getAvailableResources() { 
+      getAvailableResources() {
         Nova.request()
           .get(
             `/nova-api/armincms/${this.resourceName}/attachable/${this.field.resourceName}`,
@@ -407,7 +433,7 @@ export default {
       /**
        * Get all of the available resources for the current search / trashed state.
        */
-      getAttachedResources() { 
+      getAttachedResources() {
         Nova.request()
           .get(
             `/nova-api/armincms/${this.resourceName}/attached/${this.field.resourceName}`,
@@ -427,59 +453,73 @@ export default {
             tag.attached = resource.attached
             tag.id = resource.id
         })
-      },  
+      },
 
       /**
        * Get all of the available fields for an attachment.
        */
-      async getPivotFields(resource) {   
+      async getPivotFields(resource) {
         await Nova.request()
           .get(
             `/nova-api/armincms/${this.resourceName}/pivot-fields/${this.field.resourceName}`,
             {
               params: {
-                field: this.field.attribute, 
+                field: this.field.attribute,
                 resourceId: this.resourceId,
-                relatedId: this.processingResource.id, 
-                pivotId: this.processingResource.pivotId, 
+                relatedId: this.processingResource.id,
+                pivotId: this.processingResource.pivotId,
                 editing: true,
-                editMode: resource.attached ? 'update-attached' : 'attach' 
+                editMode: resource.attached ? 'update-attached' : 'attach'
               },
             }
-          ) 
-          .then(({ data }) => { 
+          )
+          .then(({ data }) => {
             this.fields = data
 
             _.each(this.fields, field => {
-              field.fill = () => ''  
+              field.fill = () => ''
 
-              var pivots = this.pivots[resource.pivotAccessor] 
-                              ? this.pivots[resource.pivotAccessor] 
+              var pivots = this.pivots[resource.pivotAccessor]
+                              ? this.pivots[resource.pivotAccessor]
                               : new FormData
 
               if(pivots.has(field.attribute)) {
                 field.value = pivots.getAll(field.attribute)
-              } 
+              }
             })
-          }) 
-      }, 
+          })
+      },
     },
 
-    computed: {  
-      filteredResources() {    
-        return this.availableResources.filter(item => { 
+    computed: {
+      watchedComponents() {
+        if(!this.field.parent_attribute) {
+          return [];
+        }
+        return this.$parent.$children.filter(component => {
+          return this.isWatchingComponent(component);
+        })
+      },
+      endpoint() {
+        return this.field.endpoint
+            .replace('{resource-name}', this.resourceName)
+            .replace('{resource-id}', this.resourceId ? this.resourceId : '')
+            .replace('{'+ this.field.parent_attribute +'}', this.parentValue ? this.parentValue : '')
+      },
+      filteredResources() {
+        return this.availableResources.filter(item => {
           return this.tag.length === 0 || item.text.match(this.tag);
         });
-      },  
+      },
 
       /**
        * Get the form data for the resource attachment.
        */
       attachmentFormData() {
         return _.tap(new FormData(), formData => {
-          _.each(this.fields, field => { 
+          _.each(this.fields, field => {
             field.fill(formData)
-          }) 
+          })
         })
       },
 
@@ -491,9 +531,9 @@ export default {
       },
 
       fillResources() {
-        return this.attachedResources.map(resource => { 
+        return this.attachedResources.map(resource => {
           delete resource.text
-          delete resource.tiClasses  
+          delete resource.tiClasses
 
           return resource
         })

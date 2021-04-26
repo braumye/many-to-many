@@ -3,14 +3,14 @@
 namespace Armincms\Fields;
 
 use Illuminate\Http\Request;
-use Laravel\Nova\Http\Requests\NovaRequest;
-use Laravel\Nova\Fields\Field;
-use Laravel\Nova\Fields\DetachesPivotModels;
-use Laravel\Nova\Fields\ResourceRelationshipGuesser;
-use Laravel\Nova\Fields\FormatsRelatableDisplayValues;
-use Laravel\Nova\TrashedStatus;
 use Illuminate\Support\Str;
+use Laravel\Nova\Fields\DetachesPivotModels;
+use Laravel\Nova\Fields\Field;
+use Laravel\Nova\Fields\FormatsRelatableDisplayValues;
+use Laravel\Nova\Fields\ResourceRelationshipGuesser;
+use Laravel\Nova\Http\Requests\NovaRequest;
 use Laravel\Nova\Nova;
+use Laravel\Nova\TrashedStatus;
 
 abstract class ManyToMany extends Field
 {
@@ -132,7 +132,8 @@ abstract class ManyToMany extends Field
     public function authorize(Request $request)
     {
         return call_user_func(
-            [$this->resourceClass, 'authorizedToViewAny'], $request
+            [$this->resourceClass, 'authorizedToViewAny'],
+            $request
         ) && parent::authorize($request);
     }
 
@@ -157,9 +158,10 @@ abstract class ManyToMany extends Field
                               ->getResults();
         }
 
-        $this->value = collect($value)->map(function($resource) {
+        $this->value = collect($value)->map(function ($resource) {
             $display = $this->formatAttachableResource(
-                app(NovaRequest::class), new $this->resourceClass($resource)
+                app(NovaRequest::class),
+                new $this->resourceClass($resource)
             );
 
             return array_merge(['pivotId' => $resource->pivot->id], $display);
@@ -180,7 +182,7 @@ abstract class ManyToMany extends Field
         if ($request->exists($requestAttribute)) {
             $value = collect($request[$requestAttribute])->map([$this, 'normalize']);
 
-            $model::saved(function($model) use ($value, $request, $requestAttribute) {
+            $model::saved(function ($model) use ($value, $request, $requestAttribute) {
                 $authorized = $this->removeNonAuthorizedAttachments($request, $value, $model);
 
                 $relationship = $model->{$this->manyToManyRelationship}()->withPivot('id');
@@ -192,7 +194,7 @@ abstract class ManyToMany extends Field
                 $relationship->wherePivotIn('id', $detaching->pluck('pivotId')->all())
                             ->detach($detaching->pluck('id')->all());
 
-                if(! $this->duplicate) {
+                if (! $this->duplicate) {
                     $attaching = $this->removeDuplicateAttachments($model, $attaching)
                                         ->keyBy('id')
                                         ->map([$this, 'fetchPivotValues'])
@@ -200,9 +202,10 @@ abstract class ManyToMany extends Field
 
                     $relationship->syncWithoutDetaching($attaching);
                 } else {
-                    $attaching->each(function($attachment) use ($relationship) {
+                    $attaching->each(function ($attachment) use ($relationship) {
                         $relationship->attach(
-                            $attachment['id'], $this->fetchPivotValues($attachment)
+                            $attachment['id'],
+                            $this->fetchPivotValues($attachment)
                         );
                     });
                 }
@@ -234,7 +237,7 @@ abstract class ManyToMany extends Field
      */
     protected function removeNonAuthorizedAttachments(NovaRequest $request, $attachments, $model)
     {
-        return collect($attachments)->filter(function($attachment) use ($request, $model) {
+        return collect($attachments)->filter(function ($attachment) use ($request, $model) {
             return $this->authorizedToAttach($request, $attachment['id']);
         });
     }
@@ -254,9 +257,11 @@ abstract class ManyToMany extends Field
 
 
         return (new $parentResource($parentModel))->authorizedToAttachAny(
-            $request, $attachment
+            $request,
+            $attachment
         ) || (new $parentResource($parentModel))->authorizedToAttach(
-            $request, $attachment
+            $request,
+            $attachment
         );
     }
 
@@ -274,7 +279,7 @@ abstract class ManyToMany extends Field
         $shouldDetach = $model->{$this->manyToManyRelationship}()
                                 ->withPivot('id')
                                 ->wherePivotNotIn('id', $pivotKeys)->get()
-                                ->map(function($related) {
+                                ->map(function ($related) {
                                     return [
                                         'id' => $related->id,
                                         'pivotId' => $related->pivot->id,
@@ -295,7 +300,7 @@ abstract class ManyToMany extends Field
     {
         $attachments = $model->{$this->manyToManyRelationship}()->get()->pluck('id');
 
-        return $attaching->reject(function($attachment) use ($attachments) {
+        return $attaching->reject(function ($attachment) use ($attachments) {
             return $attachments->contains($attachment['id']);
         });
     }
@@ -309,7 +314,9 @@ abstract class ManyToMany extends Field
     public function fetchPivotValues($attachment)
     {
         return (array) call_user_func(
-            $this->fillCallback, $attachment['pivots'] ?? [], $attachment['id']
+            $this->fillCallback,
+            $attachment['pivots'] ?? [],
+            $attachment['id']
         );
     }
 
@@ -330,9 +337,13 @@ abstract class ManyToMany extends Field
         }
 
         $query = $resourceClass::buildIndexQuery(
-                    $request, $modelQuery, $request->search, [], [],
-                    TrashedStatus::fromBoolean($withTrashed)
-                 );
+            $request,
+            $modelQuery,
+            $request->search,
+            [],
+            [],
+            TrashedStatus::fromBoolean($withTrashed)
+        );
 
         return $query->tap(function ($query) use ($request, $model) {
             forward_static_call($this->attachableQueryCallable($request, $model), $request, $query);
@@ -452,7 +463,7 @@ abstract class ManyToMany extends Field
      *
      * @return $this
      */
-    public function searchable(bool $searchable = true, $searchResultLimit = false )
+    public function searchable(bool $searchable = true, $searchResultLimit = false)
     {
         $this->searchResultLimit = $searchResultLimit;
         return $this->withMeta(compact('searchable'));
@@ -473,5 +484,12 @@ abstract class ManyToMany extends Field
             'pivots'        => $this->pivots,
             'withTrashed'   => $this->displaysWithTrashed,
         ], parent::jsonSerialize());
+    }
+
+    public function parent($attribute, $endpoint)
+    {
+        $this->withMeta(['parent_attribute' => $attribute, 'endpoint' => $endpoint]);
+
+        return $this;
     }
 }
