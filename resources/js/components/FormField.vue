@@ -214,8 +214,19 @@ export default {
           if (component.field.component === 'belongs-to-field') {
             attribute = 'selectedResource';
           }
+          if (component.field.component === 'armincms-belongs-to-many') {
+            attribute = 'attachedResources';
+          }
           component.$watch(attribute, (value) => {
             this.parentValue = (value && attribute == 'selectedResource') ? value.value : value;
+
+            if (attribute === 'attachedResources') {
+                let mergeResourceIds = value.map(resource => resource.id);
+                if (mergeResourceIds.length === 0) {
+                    mergeResourceIds = [0];
+                }
+                this.parentValue = mergeResourceIds.join('-');
+            }
             this.updateOptions();
           }, { immediate: true });
         });
